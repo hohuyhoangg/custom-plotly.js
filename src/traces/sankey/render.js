@@ -809,225 +809,225 @@ function switchToSankeyFormat(nodes) {
 
 // scene graph
 module.exports = function(gd, svg, calcData, layout, callbacks) {
-    var isStatic = gd._context.staticPlot;
-
-    // To prevent animation on first render
-    var firstRender = false;
-    Lib.ensureSingle(gd._fullLayout._infolayer, 'g', 'first-render', function() {
-        firstRender = true;
-    });
-
-    // To prevent animation on dragging
-    var dragcover = gd._fullLayout._dragCover;
-
-    var styledData = calcData
-            .filter(function(d) {return unwrap(d).trace.visible;})
-            .map(sankeyModel.bind(null, layout));
-
-    var sankey = svg.selectAll('.' + c.cn.sankey)
-        .data(styledData, keyFun);
-
-    sankey.exit()
-        .remove();
-
-    sankey.enter()
-        .append('g')
-        .classed(c.cn.sankey, true)
-        .style('box-sizing', 'content-box')
-        .style('position', 'absolute')
-        .style('left', 0)
-        .style('shape-rendering', 'geometricPrecision')
-        .style('pointer-events', isStatic ? 'none' : 'auto')
-        .attr('transform', sankeyTransform);
-
-    sankey.each(function(d, i) {
-        gd._fullData[i]._sankey = d;
-        // Create dragbox if missing
-        var dragboxClassName = 'bgsankey-' + d.trace.uid + '-' + i;
-        Lib.ensureSingle(gd._fullLayout._draggers, 'rect', dragboxClassName);
-
-        gd._fullData[i]._bgRect = d3.select('.' + dragboxClassName);
-
-        // Style dragbox
-        gd._fullData[i]._bgRect
-          .style('pointer-events', isStatic ? 'none' : 'all')
-          .attr('width', d.width)
-          .attr('height', d.height)
-          .attr('x', d.translateX)
-          .attr('y', d.translateY)
-          .classed('bgsankey', true)
-          .style({fill: 'transparent', 'stroke-width': 0});
-    });
-
-    sankey.transition()
-        .ease(c.ease).duration(c.duration)
-        .attr('transform', sankeyTransform);
-
-    var sankeyLinks = sankey.selectAll('.' + c.cn.sankeyLinks)
-        .data(repeat, keyFun);
-
-    sankeyLinks.enter()
-        .append('g')
-        .classed(c.cn.sankeyLinks, true)
-        .style('fill', 'none');
-
-    var sankeyLink = sankeyLinks.selectAll('.' + c.cn.sankeyLink)
-          .data(function(d) {
-              var links = d.graph.links;
-              return links
-                .filter(function(l) {return l.value;})
-                .map(linkModel.bind(null, d));
-          }, keyFun);
-
-    sankeyLink
-          .enter().append('path')
-          .classed(c.cn.sankeyLink, true)
-          .call(attachPointerEvents, sankey, callbacks.linkEvents);
-
-    sankeyLink
-        .style('stroke', function(d) {
-            return salientEnough(d) ? Color.tinyRGB(tinycolor(d.linkLineColor)) : d.tinyColorHue;
-        })
-        .style('stroke-opacity', function(d) {
-            return salientEnough(d) ? Color.opacity(d.linkLineColor) : d.tinyColorAlpha;
-        })
-        .style('fill', function(d) {
-            return d.tinyColorHue;
-        })
-        .style('fill-opacity', function(d) {
-            return d.tinyColorAlpha;
-        })
-        .style('stroke-width', function(d) {
-            return salientEnough(d) ? d.linkLineWidth : 1;
-        })
-        .attr('d', linkPath());
-
-    sankeyLink
-        .style('opacity', function() { return (gd._context.staticPlot || firstRender || dragcover) ? 1 : 0;})
-        .transition()
-        .ease(c.ease).duration(c.duration)
-        .style('opacity', 1);
-
-    sankeyLink.exit()
-        .transition()
-        .ease(c.ease).duration(c.duration)
-        .style('opacity', 0)
-        .remove();
-
-    var sankeyNodeSet = sankey.selectAll('.' + c.cn.sankeyNodeSet)
-        .data(repeat, keyFun);
-
-    sankeyNodeSet.enter()
-        .append('g')
-        .classed(c.cn.sankeyNodeSet, true);
-
-    sankeyNodeSet
-        .style('cursor', function(d) {
-            switch(d.arrangement) {
-                case 'fixed': return 'default';
-                case 'perpendicular': return 'ns-resize';
-                default: return 'move';
-            }
-        });
-
-    var sankeyNode = sankeyNodeSet.selectAll('.' + c.cn.sankeyNode)
-        .data(function(d) {
-            var nodes = d.graph.nodes;
-            persistOriginalPlace(nodes);
-            return nodes
-              .map(nodeModel.bind(null, d));
-        }, keyFun);
-
-    sankeyNode.enter()
-        .append('g')
-        .classed(c.cn.sankeyNode, true)
-        .call(updateNodePositions)
-        .style('opacity', function(n) { return ((gd._context.staticPlot || firstRender) && !n.partOfGroup) ? 1 : 0;});
-
-    sankeyNode
-        .call(attachPointerEvents, sankey, callbacks.nodeEvents)
-        .call(attachDragHandler, sankeyLink, callbacks, gd); // has to be here as it binds sankeyLink
-
-    sankeyNode
-        .transition()
-        .ease(c.ease).duration(c.duration)
-        .call(updateNodePositions)
-        .style('opacity', function(n) { return n.partOfGroup ? 0 : 1;});
-
-    sankeyNode.exit()
-        .transition()
-        .ease(c.ease).duration(c.duration)
-        .style('opacity', 0)
-        .remove();
-
-    var nodeRect = sankeyNode.selectAll('.' + c.cn.nodeRect)
-        .data(repeat);
-
-    nodeRect.enter()
-        .append('rect')
-        .classed(c.cn.nodeRect, true)
-        .call(sizeNode);
-
-    nodeRect
-        .style('stroke-width', function(d) {return d.nodeLineWidth;})
-        .style('stroke', function(d) {return Color.tinyRGB(tinycolor(d.nodeLineColor));})
-        .style('stroke-opacity', function(d) {return Color.opacity(d.nodeLineColor);})
-        .style('fill', function(d) {return d.tinyColorHue;})
-        .style('fill-opacity', function(d) {return d.tinyColorAlpha;});
-
-    nodeRect.transition()
-        .ease(c.ease).duration(c.duration)
-        .call(sizeNode);
-
-    var nodeLabel = sankeyNode.selectAll('.' + c.cn.nodeLabel)
-        .data(repeat);
-
-    nodeLabel.enter()
-        .append('text')
-        .classed(c.cn.nodeLabel, true)
-        .style('cursor', 'default');
-
-    nodeLabel
-        .attr('data-notex', 1) // prohibit tex interpretation until we can handle tex and regular text together
-        .text(function(d) { return d.node.label; })
-        .each(function(d) {
-            var e = d3.select(this);
-            Drawing.font(e, d.textFont);
-            svgTextUtils.convertToTspans(e, gd);
-        })
-        .style('text-shadow', svgTextUtils.makeTextShadow(gd._fullLayout.paper_bgcolor))
-        .attr('text-anchor', function(d) {
-            return (d.horizontal && d.left) ? 'end' : 'start';
-        })
-        .attr('transform', function(d) {
-            var e = d3.select(this);
-            // how much to shift a multi-line label to center it vertically.
-            var nLines = svgTextUtils.lineCount(e);
-            var blockHeight = d.textFont.size * (
-                (nLines - 1) * LINE_SPACING - CAP_SHIFT
-            );
-
-            var posX = d.nodeLineWidth / 2 + TEXTPAD;
-            var posY = ((d.horizontal ? d.visibleHeight : d.visibleWidth) - blockHeight) / 2;
-            if(d.horizontal) {
-                if(d.left) {
-                    posX = -posX;
-                } else {
-                    posX += d.visibleWidth;
-                }
-            }
-
-            var flipText = d.horizontal ? '' : (
-                'scale(-1,1)' + strRotate(90)
-            );
-
-            return strTranslate(
-                d.horizontal ? posX : posY,
-                d.horizontal ? posY : posX
-            ) + flipText;
-        });
-
-    nodeLabel
-        .transition()
-        .ease(c.ease).duration(c.duration);
+    // var isStatic = gd._context.staticPlot;
+    //
+    // // To prevent animation on first render
+    // var firstRender = false;
+    // Lib.ensureSingle(gd._fullLayout._infolayer, 'g', 'first-render', function() {
+    //     firstRender = true;
+    // });
+    //
+    // // To prevent animation on dragging
+    // var dragcover = gd._fullLayout._dragCover;
+    //
+    // var styledData = calcData
+    //         .filter(function(d) {return unwrap(d).trace.visible;})
+    //         .map(sankeyModel.bind(null, layout));
+    //
+    // var sankey = svg.selectAll('.' + c.cn.sankey)
+    //     .data(styledData, keyFun);
+    //
+    // sankey.exit()
+    //     .remove();
+    //
+    // sankey.enter()
+    //     .append('g')
+    //     .classed(c.cn.sankey, true)
+    //     .style('box-sizing', 'content-box')
+    //     .style('position', 'absolute')
+    //     .style('left', 0)
+    //     .style('shape-rendering', 'geometricPrecision')
+    //     .style('pointer-events', isStatic ? 'none' : 'auto')
+    //     .attr('transform', sankeyTransform);
+    //
+    // sankey.each(function(d, i) {
+    //     gd._fullData[i]._sankey = d;
+    //     // Create dragbox if missing
+    //     var dragboxClassName = 'bgsankey-' + d.trace.uid + '-' + i;
+    //     Lib.ensureSingle(gd._fullLayout._draggers, 'rect', dragboxClassName);
+    //
+    //     gd._fullData[i]._bgRect = d3.select('.' + dragboxClassName);
+    //
+    //     // Style dragbox
+    //     gd._fullData[i]._bgRect
+    //       .style('pointer-events', isStatic ? 'none' : 'all')
+    //       .attr('width', d.width)
+    //       .attr('height', d.height)
+    //       .attr('x', d.translateX)
+    //       .attr('y', d.translateY)
+    //       .classed('bgsankey', true)
+    //       .style({fill: 'transparent', 'stroke-width': 0});
+    // });
+    //
+    // sankey.transition()
+    //     .ease(c.ease).duration(c.duration)
+    //     .attr('transform', sankeyTransform);
+    //
+    // var sankeyLinks = sankey.selectAll('.' + c.cn.sankeyLinks)
+    //     .data(repeat, keyFun);
+    //
+    // sankeyLinks.enter()
+    //     .append('g')
+    //     .classed(c.cn.sankeyLinks, true)
+    //     .style('fill', 'none');
+    //
+    // var sankeyLink = sankeyLinks.selectAll('.' + c.cn.sankeyLink)
+    //       .data(function(d) {
+    //           var links = d.graph.links;
+    //           return links
+    //             .filter(function(l) {return l.value;})
+    //             .map(linkModel.bind(null, d));
+    //       }, keyFun);
+    //
+    // sankeyLink
+    //       .enter().append('path')
+    //       .classed(c.cn.sankeyLink, true)
+    //       .call(attachPointerEvents, sankey, callbacks.linkEvents);
+    //
+    // sankeyLink
+    //     .style('stroke', function(d) {
+    //         return salientEnough(d) ? Color.tinyRGB(tinycolor(d.linkLineColor)) : d.tinyColorHue;
+    //     })
+    //     .style('stroke-opacity', function(d) {
+    //         return salientEnough(d) ? Color.opacity(d.linkLineColor) : d.tinyColorAlpha;
+    //     })
+    //     .style('fill', function(d) {
+    //         return d.tinyColorHue;
+    //     })
+    //     .style('fill-opacity', function(d) {
+    //         return d.tinyColorAlpha;
+    //     })
+    //     .style('stroke-width', function(d) {
+    //         return salientEnough(d) ? d.linkLineWidth : 1;
+    //     })
+    //     .attr('d', linkPath());
+    //
+    // sankeyLink
+    //     .style('opacity', function() { return (gd._context.staticPlot || firstRender || dragcover) ? 1 : 0;})
+    //     .transition()
+    //     .ease(c.ease).duration(c.duration)
+    //     .style('opacity', 1);
+    //
+    // sankeyLink.exit()
+    //     .transition()
+    //     .ease(c.ease).duration(c.duration)
+    //     .style('opacity', 0)
+    //     .remove();
+    //
+    // var sankeyNodeSet = sankey.selectAll('.' + c.cn.sankeyNodeSet)
+    //     .data(repeat, keyFun);
+    //
+    // sankeyNodeSet.enter()
+    //     .append('g')
+    //     .classed(c.cn.sankeyNodeSet, true);
+    //
+    // sankeyNodeSet
+    //     .style('cursor', function(d) {
+    //         switch(d.arrangement) {
+    //             case 'fixed': return 'default';
+    //             case 'perpendicular': return 'ns-resize';
+    //             default: return 'move';
+    //         }
+    //     });
+    //
+    // var sankeyNode = sankeyNodeSet.selectAll('.' + c.cn.sankeyNode)
+    //     .data(function(d) {
+    //         var nodes = d.graph.nodes;
+    //         persistOriginalPlace(nodes);
+    //         return nodes
+    //           .map(nodeModel.bind(null, d));
+    //     }, keyFun);
+    //
+    // sankeyNode.enter()
+    //     .append('g')
+    //     .classed(c.cn.sankeyNode, true)
+    //     .call(updateNodePositions)
+    //     .style('opacity', function(n) { return ((gd._context.staticPlot || firstRender) && !n.partOfGroup) ? 1 : 0;});
+    //
+    // sankeyNode
+    //     .call(attachPointerEvents, sankey, callbacks.nodeEvents)
+    //     .call(attachDragHandler, sankeyLink, callbacks, gd); // has to be here as it binds sankeyLink
+    //
+    // sankeyNode
+    //     .transition()
+    //     .ease(c.ease).duration(c.duration)
+    //     .call(updateNodePositions)
+    //     .style('opacity', function(n) { return n.partOfGroup ? 0 : 1;});
+    //
+    // sankeyNode.exit()
+    //     .transition()
+    //     .ease(c.ease).duration(c.duration)
+    //     .style('opacity', 0)
+    //     .remove();
+    //
+    // var nodeRect = sankeyNode.selectAll('.' + c.cn.nodeRect)
+    //     .data(repeat);
+    //
+    // nodeRect.enter()
+    //     .append('rect')
+    //     .classed(c.cn.nodeRect, true)
+    //     .call(sizeNode);
+    //
+    // nodeRect
+    //     .style('stroke-width', function(d) {return d.nodeLineWidth;})
+    //     .style('stroke', function(d) {return Color.tinyRGB(tinycolor(d.nodeLineColor));})
+    //     .style('stroke-opacity', function(d) {return Color.opacity(d.nodeLineColor);})
+    //     .style('fill', function(d) {return d.tinyColorHue;})
+    //     .style('fill-opacity', function(d) {return d.tinyColorAlpha;});
+    //
+    // nodeRect.transition()
+    //     .ease(c.ease).duration(c.duration)
+    //     .call(sizeNode);
+    //
+    // var nodeLabel = sankeyNode.selectAll('.' + c.cn.nodeLabel)
+    //     .data(repeat);
+    //
+    // nodeLabel.enter()
+    //     .append('text')
+    //     .classed(c.cn.nodeLabel, true)
+    //     .style('cursor', 'default');
+    //
+    // nodeLabel
+    //     .attr('data-notex', 1) // prohibit tex interpretation until we can handle tex and regular text together
+    //     .text(function(d) { return d.node.label; })
+    //     .each(function(d) {
+    //         var e = d3.select(this);
+    //         Drawing.font(e, d.textFont);
+    //         svgTextUtils.convertToTspans(e, gd);
+    //     })
+    //     .style('text-shadow', svgTextUtils.makeTextShadow(gd._fullLayout.paper_bgcolor))
+    //     .attr('text-anchor', function(d) {
+    //         return (d.horizontal && d.left) ? 'end' : 'start';
+    //     })
+    //     .attr('transform', function(d) {
+    //         var e = d3.select(this);
+    //         // how much to shift a multi-line label to center it vertically.
+    //         var nLines = svgTextUtils.lineCount(e);
+    //         var blockHeight = d.textFont.size * (
+    //             (nLines - 1) * LINE_SPACING - CAP_SHIFT
+    //         );
+    //
+    //         var posX = d.nodeLineWidth / 2 + TEXTPAD;
+    //         var posY = ((d.horizontal ? d.visibleHeight : d.visibleWidth) - blockHeight) / 2;
+    //         if(d.horizontal) {
+    //             if(d.left) {
+    //                 posX = -posX;
+    //             } else {
+    //                 posX += d.visibleWidth;
+    //             }
+    //         }
+    //
+    //         var flipText = d.horizontal ? '' : (
+    //             'scale(-1,1)' + strRotate(90)
+    //         );
+    //
+    //         return strTranslate(
+    //             d.horizontal ? posX : posY,
+    //             d.horizontal ? posY : posX
+    //         ) + flipText;
+    //     });
+    //
+    // nodeLabel
+    //     .transition()
+    //     .ease(c.ease).duration(c.duration);
 };
