@@ -1,5 +1,5 @@
 /**
-* plotly.js (geo) v0.0.6
+* plotly.js (geo) v0.0.2
 * Copyright 2012-2023, Plotly, Inc.
 * All rights reserved.
 * Licensed under the MIT license
