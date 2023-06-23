@@ -35,6 +35,7 @@ function sankeyModel(layout, d, traceIndex) {
     var horizontal = trace.orientation === 'h';
     var nodePad = trace.node.pad;
     var nodeThickness = trace.node.thickness;
+    var sortNodes = layout.sortNodes || null;
 
     var width = layout.width * (domain.x[1] - domain.x[0]);
     var height = layout.height * (domain.y[1] - domain.y[0]);
@@ -43,11 +44,15 @@ function sankeyModel(layout, d, traceIndex) {
     var links = calcData._links;
     var circular = calcData.circular;
 
+    // Custom feature
+    if (sortNodes) console.log('Custom feature');
+
     // Select Sankey generator
     var sankey;
     if(circular) {
         sankey = d3SankeyCircular
             .sankeyCircular()
+            .sortNodes(sortNodes)
             .circularLinkGap(0);
     } else {
         sankey = d3Sankey.sankey();
